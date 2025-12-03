@@ -6,10 +6,10 @@
 #define PIN_PIEZO      27  // falling edges when pill hits
 
 // Stepper driver IN1–IN4 (outputs)
-#define PIN_ST_IN1      13
-#define PIN_ST_IN2      6
-#define PIN_ST_IN3      3
-#define PIN_ST_IN4     2
+#define PIN_ST_IN1      2
+#define PIN_ST_IN2      3
+#define PIN_ST_IN3      6
+#define PIN_ST_IN4     13
 
 // LoRaWAN UART1
 #define LORA_UART       uart1
@@ -37,4 +37,4 @@
 #define DISPENSE_INTERVAL_MS 30000 // 30s between dispensing for test
 #define TOTAL_PILLS          7     // wheel turns 7 times for pills (1 slot is calibration)
 #define PIEZO_FALL_WINDOW_MS 800   // window to detect falling edge considering ~3.5cm drop
-#define CALIBRATION_FULL_STEPS 512 // steps to ensure >1 full turn (adjust to your motor/gear)
+#define CALIBRATION_FULL_STEPS 4096 // steps to ensure >1 full turn (adjust to your motor/gear)

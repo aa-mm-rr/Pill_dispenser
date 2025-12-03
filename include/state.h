@@ -1,15 +1,20 @@
-#pragma once
+#ifndef STATE_H
+#define STATE_H
+
 #include <stdint.h>
 #include <stdbool.h>
 
 typedef struct {
-    uint8_t calibrated;       // 0/1
-    uint8_t pills_dispensed;  // 0..7
-    uint8_t motor_active;     // 0/1 (flag set before rotation, cleared after)
-    uint8_t reserved;
     uint32_t boot_count;
+    uint8_t  calibrated;
+    uint8_t  motor_active;
+    uint8_t  pills_dispensed;
+    uint16_t steps_per_rev;   // measured steps per revolution
 } DispenserState;
 
 bool state_load(DispenserState* s);
-bool state_save(const DispenserState* s);
-bool state_reset(DispenserState* s);
+void state_save(const DispenserState* s);
+void state_reset(DispenserState* s);
+
+#endif
+

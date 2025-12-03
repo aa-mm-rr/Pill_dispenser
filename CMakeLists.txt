@@ -25,7 +25,7 @@ set_target_properties(pill_dispenser PROPERTIES SUFFIX ".elf")
 target_include_directories(pill_dispenser PRIVATE include)
 target_link_libraries(pill_dispenser pico_stdlib hardware_gpio hardware_uart hardware_i2c hardware_timer)
 
-pico_enable_stdio_usb(pill_dispenser 1)
-pico_enable_stdio_uart(pill_dispenser 0) # UART0 reserved; using UART1 for LoRa
+pico_enable_stdio_usb(pill_dispenser 0)
+pico_enable_stdio_uart(pill_dispenser 1) # UART0 reserved; using UART1 for LoRa
 
 pico_add_extra_outputs(pill_dispenser)
