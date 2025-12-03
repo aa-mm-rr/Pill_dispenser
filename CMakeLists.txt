@@ -1,41 +1,31 @@
-# Set minimum required version of CMake
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.13)
 
-# Set board type because we are building for PicoW
-set(PICO_BOARD pico_w)
+project(pill_dispenser C CXX ASM)
 
-# Include build functions from Pico SDK
-include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
-
-# Set name of project (as PROJECT_NAME) and C/C   standards
-project(blink C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-# Creates a pico-sdk subdirectory in our project for the libraries
+include(pico_sdk_import.cmake)
 pico_sdk_init()
 
-add_compile_options(-Wall
-        -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
-        -Wno-unused-function # we have some for the docs that aren't called
-        -Wno-maybe-uninitialized
+add_executable(pill_dispenser
+        src/main.c
+        src/state.c
+        src/stepper.c
+        src/sensors.c
+        src/leds.c
+        src/buttons.c
+        src/eeprom_at24c256.c
+        src/lora.c
+        src/util.c
 )
 
-# Tell CMake where to find the executable source file
-add_executable(${PROJECT_NAME}
-        main.c
-)
+set_target_properties(pill_dispenser PROPERTIES SUFFIX ".elf")
 
-# Create map/bin/hex/uf2 files
-pico_add_extra_outputs(${PROJECT_NAME})
+target_include_directories(pill_dispenser PRIVATE include)
+target_link_libraries(pill_dispenser pico_stdlib hardware_gpio hardware_uart hardware_i2c hardware_timer)
 
-# Link to pico_stdlib (gpio, time, etc. functions)
-target_link_libraries(${PROJECT_NAME}
-        pico_stdlib
-        hardware_pwm
-        hardware_gpio
-)
+pico_enable_stdio_usb(pill_dispenser 1)
+pico_enable_stdio_uart(pill_dispenser 0) # UART0 reserved; using UART1 for LoRa
 
-# Disable usb output, enable uart output
-pico_enable_stdio_usb(${PROJECT_NAME} 0)
-pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_add_extra_outputs(pill_dispenser)
