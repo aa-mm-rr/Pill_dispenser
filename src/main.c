@@ -92,24 +92,32 @@ int main() {
             int next_pill_num = st.pills_dispensed + 1;
             printf("Dispensing pill %d of %d...\n", next_pill_num, total_pills);
 
-            // Rotate exactly one slot forward
-            stepper_rotate_steps(steps_per_slot);
-
-            // Check piezo sensor for pill drop
             printf("Checking piezo sensor for pill drop...\n");
-            bool pill_ok = sensors_piezo_falling_seen(PIEZO_FALL_WINDOW_MS);
+            bool pill_ok = stepper_rotate_and_check(steps_per_slot, PIEZO_FALL_WINDOW_MS);
+
+
+            // If not detected, try up to two gentle nudges and re-check
+            if (!pill_ok) {
+                const int nudge_steps = steps_per_slot / 16;
+                for (int attempt = 0; attempt < 2 && !pill_ok; attempt++) {
+                    printf("No drop detected, recheck...\n");
+                    stepper_rotate_steps(nudge_steps);
+                    sleep_ms(300); // short wait
+                    pill_ok = sensors_piezo_falling_seen(PIEZO_FALL_WINDOW_MS / 2);
+                }
+            }
 
             if (pill_ok) {
-                printf("✅ Pill %d detected successfully.\n", next_pill_num);
+                printf("Pill %d detected successfully.\n", next_pill_num);
                 led_on(1, true); sleep_ms(150); led_on(1, false);
                 lora_report("pill_ok");
             } else {
-                printf("❌ Pill %d not detected.\n", next_pill_num);
+                printf("Pill %d not detected.\n", next_pill_num);
                 indicate_error();
                 lora_report("pill_miss");
             }
 
-            // Always progress to the next pill, even on miss
+            // go to next pill
             st.pills_dispensed++;
             state_save(&st);
         }

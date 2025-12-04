@@ -65,9 +65,39 @@ bool stepper_rotate_steps(int steps) {
     return true;
 }
 
-static inline int opto_read(void) { return sensors_opto_read(); }
-static inline bool opto_inside_hole(void)  { return opto_read() == 0; }
-static inline bool opto_outside_hole(void) { return opto_read() == 1; }
+// --- NEW FUNCTION ---
+// Rotate slot while checking piezo sensor for pill drop
+bool stepper_rotate_and_check(int steps, uint32_t window_ms) {
+    stepper_set_motor_active(true);
+    absolute_time_t deadline = make_timeout_time_ms(window_ms);
+    bool detected = false;
+
+    for (int i = 0; i < steps; i++) {
+        // advance motor one half-step
+        phase_idx = (phase_idx + 1) & 7;
+        drive_halfstep(phase_idx);
+        sleep_ms(3);
+
+        // sample piezo during rotation (fast sampling)
+        int now = gpio_get(PIN_PIEZO);
+        if (now == 0) {
+            detected = true;
+            // optional: break early if pill detected
+            break;
+        }
+
+        if (time_reached(deadline)) break;
+    }
+
+    motor_stop();
+    stepper_set_motor_active(false);
+    return detected;
+}
+
+// --- Calibration logic unchanged except saving average ---
+static  int opto_read(void) { return sensors_opto_read(); }
+static  bool opto_inside_hole(void)  { return opto_read() == 0; }
+static bool opto_outside_hole(void) { return opto_read() == 1; }
 
 static bool wait_until_outside_hole(int* steps, int limit) {
     while (opto_inside_hole() && *steps < limit) {
@@ -143,7 +173,7 @@ bool stepper_calibrate_blocking(void) {
 
     DispenserState s;
     if (state_load(&s)) {
-        s.steps_per_rev = (uint16_t)avg;   // FIX: save avg, not total steps
+        s.steps_per_rev = (uint16_t)avg;
         state_save(&s);
         printf("Stored steps_per_rev=%u into EEPROM state.\n", s.steps_per_rev);
     }
@@ -152,4 +182,3 @@ bool stepper_calibrate_blocking(void) {
     stepper_set_motor_active(false);
     return true;
 }
-

@@ -9,7 +9,7 @@ typedef struct {
     uint8_t  calibrated;
     uint8_t  motor_active;
     uint8_t  pills_dispensed;
-    uint16_t steps_per_rev;   // measured steps per revolution
+    uint16_t steps_per_rev;
 } DispenserState;
 
 bool state_load(DispenserState* s);
