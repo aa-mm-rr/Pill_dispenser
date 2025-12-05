@@ -65,7 +65,7 @@ bool stepper_rotate_steps(int steps) {
     return true;
 }
 
-// --- NEW FUNCTION ---
+
 // Rotate slot while checking piezo sensor for pill drop
 bool stepper_rotate_and_check(int steps, uint32_t window_ms) {
     stepper_set_motor_active(true);
@@ -83,10 +83,8 @@ bool stepper_rotate_and_check(int steps, uint32_t window_ms) {
         if (now == 0) {
             detected = true;
             // optional: break early if pill detected
-            break;
         }
 
-        if (time_reached(deadline)) break;
     }
 
     motor_stop();
@@ -125,20 +123,20 @@ bool stepper_calibrate_blocking(void) {
     printf("Starting calibration (3 revs, end-of-hole)...\n");
 
     const int steps_per_rev_nominal = 4096;
-    const int max_steps             = steps_per_rev_nominal * 5;
+    const int max_steps = steps_per_rev_nominal * 5;
     int steps = 0;
 
     stepper_set_motor_active(true);
 
     if (!wait_until_outside_hole(&steps, max_steps)) {
-        printf("❌ Could not exit hole before starting. Steps=%d\n", steps);
+        printf("Could not exit hole before starting. Steps=%d\n", steps);
         motor_stop();
         stepper_set_motor_active(false);
         return false;
     }
 
     if (!wait_for_end_of_hole(&steps, max_steps)) {
-        printf("❌ No initial end-of-hole found. Steps=%d\n", steps);
+        printf("No initial end-of-hole found. Steps=%d\n", steps);
         motor_stop();
         stepper_set_motor_active(false);
         return false;
@@ -155,7 +153,7 @@ bool stepper_calibrate_blocking(void) {
             if (steps % 512 == 0) printf("Progress: %d steps...\n", steps);
         }
         if (!wait_for_end_of_hole(&steps, max_steps)) {
-            printf("❌ Could not find end-of-hole #%d. Steps=%d\n", i + 1, steps);
+            printf("Could not find end-of-hole #%d. Steps=%d\n", i + 1, steps);
             motor_stop();
             stepper_set_motor_active(false);
             return false;
@@ -169,7 +167,7 @@ bool stepper_calibrate_blocking(void) {
     int d3 = refs[2] - refs[1];
     int avg = (d1 + d2 + d3) / 3;
 
-    printf("✅ Average steps per revolution: %d\n", avg);
+    printf("Average steps per revolution: %d\n", avg);
 
     DispenserState s;
     if (state_load(&s)) {

@@ -34,7 +34,7 @@
 #define EEPROM_ADDR    0x50 // A0/A1 = GND
 
 // App parameters
-#define DISPENSE_INTERVAL_MS 30000 // 30s between dispensing for test
-#define TOTAL_PILLS          7     // wheel turns 7 times for pills (1 slot is calibration)
+#define DISPENSE_INTERVAL_MS 30000 // 30s between dispensing
+#define TOTAL_PILLS          7     // wheel turns 7 times for pills
 #define PIEZO_FALL_WINDOW_MS 800   // window to detect falling edge considering ~3.5cm drop
 #define CALIBRATION_FULL_STEPS 4096 // steps to ensure >1 full turn (adjust to your motor/gear)

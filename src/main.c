@@ -21,8 +21,7 @@ static void wait_for_button_and_blink(void) {
 }
 
 static void indicate_error(void) {
-    printf("⚠️ Pill not detected! Blinking LED2...\n");
-    led_blink(2, 5, 150, 150);
+    led_blink(2, 5, 200, 200);
 }
 
 int main() {
@@ -32,8 +31,7 @@ int main() {
     sensors_init();
     stepper_init();
     eeprom_init();
-    sleep_ms(2000); // wait for USB serial to enumerate
-    printf("Hello from Pico WH!\n");
+    sleep_ms(2000); // small wait to open terminal
 
     DispenserState st;
     if (!state_load(&st)) {
@@ -75,16 +73,15 @@ int main() {
         printf("Press button 2 to start dispensing.\n");
         while (!button_read(2)) sleep_ms(50);
 
-        printf("Starting pill dispensing loop...\n");
+        printf("Starting pill dispensing...\n");
         periodic_t ticker;
         periodic_start(&ticker, millis(), DISPENSE_INTERVAL_MS);
 
-        // We have 8 slots, 7 pills to dispense
+        // 8 slots - 7 for pills
         const int total_pills = TOTAL_PILLS; // should be 7
-        const int steps_per_rev_used = (st.steps_per_rev > 0 ? st.steps_per_rev : CALIBRATION_FULL_STEPS);
-        const int steps_per_slot = steps_per_rev_used / 8;
+        const int steps_per_slot = st.steps_per_rev / 8;
 
-        printf("Using steps_per_rev=%d, steps_per_slot=%d\n", steps_per_rev_used, steps_per_slot);
+        printf("Using steps_per_rev=%d, steps_per_slot=%d\n", st.steps_per_rev, steps_per_slot);
 
         while (st.pills_dispensed < total_pills) {
             while (!periodic_due(&ticker, millis())) sleep_ms(10);
@@ -95,17 +92,6 @@ int main() {
             printf("Checking piezo sensor for pill drop...\n");
             bool pill_ok = stepper_rotate_and_check(steps_per_slot, PIEZO_FALL_WINDOW_MS);
 
-
-            // If not detected, try up to two gentle nudges and re-check
-            if (!pill_ok) {
-                const int nudge_steps = steps_per_slot / 16;
-                for (int attempt = 0; attempt < 2 && !pill_ok; attempt++) {
-                    printf("No drop detected, recheck...\n");
-                    stepper_rotate_steps(nudge_steps);
-                    sleep_ms(300); // short wait
-                    pill_ok = sensors_piezo_falling_seen(PIEZO_FALL_WINDOW_MS / 2);
-                }
-            }
 
             if (pill_ok) {
                 printf("Pill %d detected successfully.\n", next_pill_num);
@@ -125,7 +111,7 @@ int main() {
         printf("All pills dispensed. Cycle complete.\n");
         lora_report("empty");
 
-        // Reset state for next cycle
+        // reset state for next cycle
         st.calibrated = 0;
         st.pills_dispensed = 0;
         state_save(&st);
