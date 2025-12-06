@@ -75,7 +75,7 @@ void stepper_full_turn_nominal(void) {
     stepper_steps(NOMINAL_FULL_REV_STEPS);
 }
 
-// Debounced sensor read
+/* Debounced sensor read: vote over small samples to stabilize noisy opto */
 static bool opto_read_stable(void) {
     int low = 0, high = 0;
     for (int i = 0; i < 8; ++i) {
@@ -86,55 +86,87 @@ static bool opto_read_stable(void) {
     return high > low;
 }
 
+/* Fast helpers using raw reads (no debounce) to avoid missing narrow holes */
+static inline bool opto_raw_open(void)   { return opto_is_opening_at_sensor(); }
+static inline bool opto_raw_closed(void) { return !opto_is_opening_at_sensor(); }
+
+/* Seek until sensor reports OPEN using raw reads, then confirm with debounce */
+static bool seek_open_then_confirm(uint32_t max_steps) {
+    for (uint32_t i = 0; i < max_steps; ++i) {
+        stepper_step_sequence_once();
+        sleep_us(STEPPER_STEP_DELAY_US);
+        if (opto_raw_open()) {
+            // Confirm with stable read
+            if (opto_read_stable()) return true;
+        }
+    }
+    return false;
+}
+
+/* Seek until sensor reports CLOSED using raw reads, then confirm with debounce */
+static bool seek_closed_then_confirm(uint32_t max_steps) {
+    for (uint32_t i = 0; i < max_steps; ++i) {
+        stepper_step_sequence_once();
+        sleep_us(STEPPER_STEP_DELAY_US);
+        if (opto_raw_closed()) {
+            if (!opto_read_stable()) return true;
+        }
+    }
+    return false;
+}
+
+/* Count one revolution: leave hole → next hole → leave hole */
 uint32_t stepper_calibrate_revolution(void) {
-    printf("[CAL] Phase 1: Seeking first OPEN (hole at sensor)...\n");
-    bool open = false;
-    for (uint32_t i = 0; i < NOMINAL_FULL_REV_STEPS * 2; ++i) {
-        stepper_step_sequence_once();
-        sleep_us(STEPPER_STEP_DELAY_US);
-        open = opto_read_stable();
-        if (open) {
-            printf("[CAL] Hole detected (OPEN). Proceeding to leave the hole.\n");
-            break;
-        }
-    }
-    if (!open) {
-        printf("[CAL] Failed to detect initial OPEN within scan window.\n");
+    printf("[CAL] Seeking first hole...\n");
+
+    // Seek OPEN (hole) anywhere within 2 nominal turns
+    if (!seek_open_then_confirm(NOMINAL_FULL_REV_STEPS * 2)) {
+        printf("[CAL][ERR] Failed to find initial OPEN within timeout.\n");
         return 0;
     }
 
-    printf("[CAL] Phase 2: Leaving hole (waiting for CLOSED)...\n");
-    bool closed = false;
-    for (uint32_t i = 0; i < NOMINAL_FULL_REV_STEPS / 2; ++i) {
-        stepper_step_sequence_once();
-        sleep_us(STEPPER_STEP_DELAY_US);
-        closed = !opto_read_stable();
-        if (closed) {
-            printf("[CAL] Hole left (CLOSED). Starting revolution step count.\n");
-            break;
-        }
-    }
-    if (!closed) {
-        printf("[CAL] Failed to leave hole (never saw CLOSED). Check sensor polarity/width.\n");
+    // Leave hole to CLOSED (edge right after hole)
+    if (!seek_closed_then_confirm(NOMINAL_FULL_REV_STEPS / 2)) {
+        printf("[CAL][ERR] Failed to leave hole to CLOSED.\n");
         return 0;
     }
 
-    printf("[CAL] Phase 3: Counting steps until next OPEN...\n");
     uint32_t steps = 0;
-    bool next_open = false;
-    for (uint32_t i = 0; i < NOMINAL_FULL_REV_STEPS * 2; ++i) {
+
+    // Count steps until we hit the next hole (OPEN)
+    while (steps < NOMINAL_FULL_REV_STEPS * 2) {
         stepper_step_sequence_once();
         sleep_us(STEPPER_STEP_DELAY_US);
         steps++;
-        next_open = opto_read_stable();
-        if (next_open) {
-            printf("[CAL] Next hole detected (OPEN). Revolution steps = %u\n", steps);
-            return steps;
+        if (opto_raw_open() && opto_read_stable()) {
+            // Now leave the hole (CLOSED) to finish the revolution at the end of hole
+            while (steps < NOMINAL_FULL_REV_STEPS * 2) {
+                stepper_step_sequence_once();
+                sleep_us(STEPPER_STEP_DELAY_US);
+                steps++;
+                if (opto_raw_closed() && !opto_read_stable()) {
+                    printf("[CAL] Revolution complete at end of hole. Steps=%u\n", steps);
+                    return steps;
+                }
+            }
+            printf("[CAL][ERR] Timeout leaving hole after OPEN.\n");
+            return 0;
         }
     }
 
-    printf("[CAL] Did not detect next OPEN within scan window. Calibration failed.\n");
+    printf("[CAL][ERR] Timeout seeking next OPEN.\n");
     return 0;
+}
+
+/* Count two consecutive revolutions */
+bool calibrate_two_revolutions(uint32_t *rev1_steps, uint32_t *rev2_steps) {
+    *rev1_steps = stepper_calibrate_revolution();
+    if (*rev1_steps == 0) return false;
+
+    *rev2_steps = stepper_calibrate_revolution();
+    if (*rev2_steps == 0) return false;
+
+    return true;
 }
 
 static uint8_t current_slot = CALIBRATION_SLOT_INDEX;

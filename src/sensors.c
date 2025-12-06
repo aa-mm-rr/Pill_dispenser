@@ -1,42 +1,39 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
+#include "hardware/adc.h"
 #include "config.h"
 #include "sensors.h"
-#include "util.h"
+#include <stdlib.h>  // for abs()
 
 void sensors_init(void) {
+    // Opto sensor (digital input with pull-up)
     gpio_init(PIN_OPTO);
     gpio_set_dir(PIN_OPTO, GPIO_IN);
     gpio_pull_up(PIN_OPTO);
 
-    gpio_init(PIN_PIEZO);
-    gpio_set_dir(PIN_PIEZO, GPIO_IN);
-    gpio_pull_up(PIN_PIEZO);
+    // Piezo sensor on GP27 (ADC1)
+    adc_init();
+    adc_gpio_init(PIN_PIEZO);   // configure GPIO for ADC
+    adc_select_input(1);        // GP27 = ADC1
 }
 
 bool opto_is_opening_at_sensor(void) {
-    // Reads zero when opening is at sensor
-    return gpio_get(PIN_OPTO) == 0;
+    // Active LOW: returns true when hole is aligned
+    return !gpio_get(PIN_OPTO);
 }
 
 bool piezo_detect_pill_hit(uint32_t window_ms, uint32_t debounce_ms, uint8_t min_edges) {
-    uint32_t start = now_ms();
+    uint32_t start = to_ms_since_boot(get_absolute_time());
     uint8_t edges = 0;
-    bool last = gpio_get(PIN_PIEZO);
-    uint32_t last_edge_time = start;
+    uint16_t last = adc_read();
 
-    while (now_ms() - start < window_ms) {
-        bool val = gpio_get(PIN_PIEZO);
-        if (last && !val) {
-            // falling edge
-            uint32_t t = now_ms();
-            if (t - last_edge_time >= debounce_ms) {
-                edges++;
-                last_edge_time = t;
-            }
+    while (to_ms_since_boot(get_absolute_time()) - start < window_ms) {
+        uint16_t current = adc_read();
+        if (abs((int)current - (int)last) > 300) {   // threshold ~100 ADC counts
+            edges++;
+            last = current;
+            sleep_ms(debounce_ms);                   // debounce to avoid false triggers
         }
-        last = val;
-        sleep_ms(1);
     }
     return edges >= min_edges;
 }

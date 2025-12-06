@@ -37,14 +37,14 @@
 
 // Timing (testing mode)
 #define DISPENSE_INTERVAL_MS      30000  // 30 seconds
-#define STEPPER_STEP_DELAY_US     1200   // ~833 Hz
+#define STEPPER_STEP_DELAY_US     2000   // ~833 Hz
 
 #define NOMINAL_FULL_REV_STEPS    4096
 #define NOMINAL_SLOT_STEPS        (NOMINAL_FULL_REV_STEPS / TOTAL_COMPARTMENTS)
 
 
-#define PIEZO_FALL_WINDOW_MS      800    // window to detect drop. needed at least 270
-#define PIEZO_DEBOUNCE_MS         30     // debounce successive edges
+#define PIEZO_FALL_WINDOW_MS      1000   // window to detect drop. needed at least 270
+#define PIEZO_DEBOUNCE_MS         0     // debounce successive edges
 #define PIEZO_MIN_EDGES           1      // at least one falling edge counts as "pill hit"
 
 // LoRa settings

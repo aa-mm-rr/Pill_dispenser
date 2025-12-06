@@ -13,8 +13,11 @@ void stepper_steps(uint32_t steps);
 void stepper_advance_one_slot(void);
 void stepper_full_turn_nominal(void);
 
+// Calibration
 uint32_t stepper_calibrate_revolution(void);
+bool calibrate_two_revolutions(uint32_t *rev1_steps, uint32_t *rev2_steps);
 
+// Slot utilities
 void slot_set(uint8_t slot_index);
 void slot_advance(void);
 uint8_t slot_get(void);
