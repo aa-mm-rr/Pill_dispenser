@@ -1,78 +1,84 @@
-#include "lora.h"
-#include "board.h"
-#include "pico/stdlib.h"
-#include "hardware/uart.h"
 #include <string.h>
 #include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/uart.h"
+#include "hardware/gpio.h"
+#include "config.h"
+#include "lora.h"
+#include "util.h"
 
-static bool uart_read_until(char* out, int maxlen, const char* want, uint32_t timeout_ms){
-  int n = 0;
-  absolute_time_t deadline = make_timeout_time_ms(timeout_ms);
-  while (absolute_time_diff_us(get_absolute_time(), deadline) < 0 && n < maxlen-1){
-    if (uart_is_readable(LORA_UART)){
-      char c = uart_getc(LORA_UART);
-      out[n++] = c;
-      out[n] = 0;
-      if (strstr(out, want)) return true;
-    } else {
-      sleep_ms(5);
+static bool read_line(char *buf, size_t max_len, uint32_t timeout_ms) {
+    uint32_t start = now_ms();
+    size_t idx = 0;
+    while (now_ms() - start < timeout_ms) {
+        if (uart_is_readable(LORA_UART_ID)) {
+            char c = uart_getc(LORA_UART_ID);
+            if (c == '\r' || c == '\n') {
+                if (idx > 0) { buf[idx] = '\0'; return true; }
+            } else if (idx < max_len - 1) {
+                buf[idx++] = c;
+            }
+        }
+        tight_loop_contents();
     }
-  }
-  return false;
+    return false;
 }
 
-static void uart_putsln(const char* s){
-  uart_puts(LORA_UART, s);
-  uart_puts(LORA_UART, "\r\n");
+static void uart_send(const char *s) {
+    for (size_t i = 0; i < strlen(s); ++i) uart_putc_raw(LORA_UART_ID, s[i]);
+    uart_putc_raw(LORA_UART_ID, '\r');
+    uart_putc_raw(LORA_UART_ID, '\n');
 }
 
-void lora_init(void){
-  uart_init(LORA_UART, LORA_BAUD);
-  gpio_set_function(PIN_LORA_TX, GPIO_FUNC_UART);
-  gpio_set_function(PIN_LORA_RX, GPIO_FUNC_UART);
-  sleep_ms(50);
-  uart_putsln("AT");
-  char buf[256]={0};
-  uart_read_until(buf, sizeof(buf), "+AT: OK", 500);
-  uart_putsln("AT+MODE=LWOTAA");
-  uart_read_until(buf, sizeof(buf), "+MODE: LWOTAA", 1000);
-  lora_set_class_a();
-  lora_set_port(8);
+void lora_init(void) {
+    uart_init(LORA_UART_ID, LORA_BAUD);
+    gpio_set_function(PIN_LORA_TX, GPIO_FUNC_UART);
+    gpio_set_function(PIN_LORA_RX, GPIO_FUNC_UART);
+    sleep_ms(50);
+
+    // Test with AT
+    lora_send_cmd("AT", "OK", LORA_CMD_RESP_TIMEOUT_MS);
 }
 
-void lora_set_port(uint8_t port){
-  char cmd[32]; snprintf(cmd,sizeof(cmd),"AT+PORT=%u",port);
-  uart_putsln(cmd); char r[128]={0};
-  uart_read_until(r,sizeof(r), "+PORT:", 1000);
+bool lora_send_cmd(const char *cmd, const char *expect, uint32_t timeout_ms) {
+    uart_send(cmd);
+    char line[128];
+    while (read_line(line, sizeof(line), timeout_ms)) {
+        if (strstr(line, expect) != NULL) return true;
+        // Keep reading until timeout or expected token
+    }
+    return false;
 }
 
-void lora_set_class_a(void){
-  uart_putsln("AT+CLASS=A"); char r[128]={0};
-  uart_read_until(r,sizeof(r), "+CLASS: A", 1000);
+bool lora_join_network(const char *appkey_hex) {
+    char cmd[128];
+
+    if (!lora_send_cmd("AT", "OK", LORA_CMD_RESP_TIMEOUT_MS)) return false;
+
+    snprintf(cmd, sizeof(cmd), "AT+MODE=%s", LORA_MODE);
+    if (!lora_send_cmd(cmd, "OK", LORA_CMD_RESP_TIMEOUT_MS)) return false;
+
+    snprintf(cmd, sizeof(cmd), "AT+KEY=APPKEY,\"%s\"", appkey_hex);
+    if (!lora_send_cmd(cmd, "OK", LORA_CMD_RESP_TIMEOUT_MS)) return false;
+
+    snprintf(cmd, sizeof(cmd), "AT+CLASS=%c", LORA_CLASS);
+    if (!lora_send_cmd(cmd, "OK", LORA_CMD_RESP_TIMEOUT_MS)) return false;
+
+    snprintf(cmd, sizeof(cmd), "AT+PORT=%d", LORA_PORT);
+    if (!lora_send_cmd(cmd, "OK", LORA_CMD_RESP_TIMEOUT_MS)) return false;
+
+    // +JOIN can take up to ~20 seconds; retry if fails
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        if (lora_send_cmd("AT+JOIN", "Joined", LORA_JOIN_TIMEOUT_MS)) {
+            return true;
+        }
+        sleep_ms(1000);
+    }
+    return false;
 }
 
-bool lora_join_otaa(const char* appkey_hex){
-  char r[256]={0};
-  // AppEui can stay default (8000000000000006) on your module or set explicitly if required
-  // AppKey must be set
-  char cmd[96];
-  snprintf(cmd,sizeof(cmd),"AT+KEY=APPKEY,\"%s\"",appkey_hex);
-  uart_putsln(cmd); uart_read_until(r,sizeof(r), "+KEY: APPKEY", 1000);
-
-  uart_putsln("AT+JOIN");
-  // JOIN can take up to ~20s
-  if (uart_read_until(r,sizeof(r), "+JOIN: Done", 20000)) return true;
-  return false;
-}
-
-bool lora_send_msg(const char* text, uint32_t timeout_ms){
-  char cmd[160]; snprintf(cmd,sizeof(cmd),"AT+MSG=\"%s\"", text);
-  uart_putsln(cmd);
-  char r[256]={0};
-  return uart_read_until(r, sizeof(r), "+MSG: Done", timeout_ms);
-}
-
-void lora_report(const char* tag){
-  // Helper to send short status lines
-  lora_send_msg(tag, 8000);
+bool lora_send_status(const char *msg) {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "AT+MSG=\"%s\"", msg);
+    return lora_send_cmd(cmd, "Done", LORA_MSG_TIMEOUT_MS);
 }

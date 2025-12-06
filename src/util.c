@@ -1,19 +1,19 @@
+#include "pico/stdlib.h"
 #include "util.h"
-#include "pico/time.h"
 
-uint32_t millis(void){
+uint32_t now_ms(void) {
     return to_ms_since_boot(get_absolute_time());
 }
 
-void periodic_start(periodic_t* t, uint32_t now_ms, uint32_t period_ms){
-    t->start_ms = now_ms;
-    t->period_ms = period_ms;
+void sleep_ms_blocking(uint32_t ms) {
+    sleep_ms(ms);
 }
 
-bool periodic_due(periodic_t* t, uint32_t now_ms){
-    if (now_ms - t->start_ms >= t->period_ms){
-        t->start_ms += t->period_ms;
-        return true;
+bool wait_for_condition_ms(bool (*cond)(void), uint32_t timeout_ms) {
+    uint32_t t0 = now_ms();
+    while (now_ms() - t0 < timeout_ms) {
+        if (cond()) return true;
+        sleep_ms(1);
     }
     return false;
 }

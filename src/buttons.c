@@ -1,26 +1,30 @@
-// src/buttons.c
-#include "buttons.h"
-#include "board.h"
+#include "pico/stdlib.h"
 #include "hardware/gpio.h"
+#include "config.h"
+#include "buttons.h"
 
-static int btn2pin(int idx){
-    switch(idx){
-        case 1: return PIN_BTN1;
-        case 2: return PIN_BTN2;
-        default: return PIN_BTN3;
-    }
+static bool debounced_read(uint pin) {
+    bool a = gpio_get(pin);
+    sleep_ms(5);
+    bool b = gpio_get(pin);
+    return a && b;
 }
 
-void buttons_init(void){
-    for (int i=1;i<=4;i++){
-        int p = btn2pin(i);
-        gpio_init(p);
-        gpio_set_dir(p,false);
-        gpio_pull_up(p);
-    }
+void buttons_init(void) {
+    gpio_init(PIN_BTN_CAL);
+    gpio_set_dir(PIN_BTN_CAL, GPIO_IN);
+    gpio_pull_up(PIN_BTN_CAL);
+
+    gpio_init(PIN_BTN_START);
+    gpio_set_dir(PIN_BTN_START, GPIO_IN);
+    gpio_pull_up(PIN_BTN_START);
 }
 
-bool button_read(int idx){
-    int p = btn2pin(idx);
-    return gpio_get(p) == 0; // active low
+bool button_cal_pressed(void) {
+    // active low with pull-up assumption
+    return !debounced_read(PIN_BTN_CAL);
+}
+
+bool button_start_pressed(void) {
+    return !debounced_read(PIN_BTN_START);
 }
