@@ -11,7 +11,7 @@
 #include "util.h"
 
 // LoRa APPKEY
-static const char *LORA_APPKEY = "00112233445566778899AABBCCDDEEFF";
+static const char *LORA_APPKEY = " ";
 
 extern nv_state_t g_state;
 
@@ -29,7 +29,7 @@ static void report_status(const char *event) {
     }
 }
 
-// Recovery after power loss mid-turn: no rotation, resume from saved slot/state
+// recovery after power loss mid-turn, resume from saved slot
 static void safe_recover_if_mid_turn(void) {
     if (g_state.motor_in_progress) {
         printf("(RECOVERY) Power loss detected mid-turn. Resuming without rotation.\n");
@@ -81,10 +81,10 @@ int main() {
         report_status("boot");
     }
 
-    // New recovery: resume from saved slot without rotating
+    // resume from saved slot
     safe_recover_if_mid_turn();
 
-    // Initialize system state based on saved calibration and progress
+    // initialize system state based on saved calibration and progress
     system_state_t sys;
     if (g_state.calibrated) {
         if (g_state.dispenses_done < DISPENSE_SLOTS) {
@@ -99,7 +99,6 @@ int main() {
         sys = SYS_WAIT_CAL_BUTTON;
         printf("(ACTION) Press button 1 to start wheel calibration.\n");
     }
-
     while (true) {
         switch (sys) {
             case SYS_WAIT_CAL_BUTTON: {
@@ -181,7 +180,6 @@ int main() {
                     bool hit = piezo_detect_pill_hit(PIEZO_FALL_WINDOW_MS, PIEZO_DEBOUNCE_MS, PIEZO_MIN_EDGES);
 
                     g_state.dispenses_done++;
-
                     if (hit) {
                         g_state.pills_dispensed_count++;
                         if (g_state.pills_remaining > 0) g_state.pills_remaining--;
@@ -221,3 +219,53 @@ int main() {
     }
     return 0;
 }
+
+
+
+
+/* some code to find out devui
+ #include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/uart.h"
+
+#define LORA_UART_ID uart1
+#define LORA_BAUDRATE 9600
+#define LORA_TX_PIN 4
+#define LORA_RX_PIN 5
+
+int main() {
+    stdio_init_all();
+    sleep_ms(2000);
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    printf("=== LoRa-E5 DevEUI Query ===\n");
+
+    uart_init(LORA_UART_ID, LORA_BAUDRATE);
+    gpio_set_function(LORA_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(LORA_RX_PIN, GPIO_FUNC_UART);
+
+    sleep_ms(1000);
+
+    uart_puts(LORA_UART_ID, "AT\r\n");
+    sleep_ms(500);
+    uart_puts(LORA_UART_ID, "AT+ID=DevEui\r\n");
+
+    char buf[64];
+    int idx = 0;
+
+    while (true) {
+        if (uart_is_readable(LORA_UART_ID)) {
+            char c = uart_getc(LORA_UART_ID);
+            if (c == '\r' || c == '\n') {
+                if (idx > 0) {
+                    buf[idx] = '\0';
+                    printf("LoRa-E5 says: %s\n", buf);
+                    idx = 0;
+                }
+            } else if (idx < sizeof(buf) - 1) {
+                buf[idx++] = c;
+            }
+        }
+    }
+}
+*/

@@ -29,7 +29,7 @@ bool piezo_detect_pill_hit(uint32_t window_ms, uint32_t debounce_ms, uint8_t min
 
     while (to_ms_since_boot(get_absolute_time()) - start < window_ms) {
         uint16_t current = adc_read();
-        if (abs((int)current - (int)last) > 300) {   // threshold ~100 ADC counts
+        if (abs((int)current - (int)last) > 300) {
             edges++;
             last = current;
             sleep_ms(debounce_ms);                   // debounce to avoid false triggers
