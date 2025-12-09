@@ -1,41 +1,23 @@
 #include <stdio.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "config.h"
 #include "state.h"
 #include "stepper.h"
 #include "sensors.h"
 #include "eeprom.h"
-#include "lora.h"
 #include "leds.h"
 #include "buttons.h"
 #include "util.h"
 
-// LoRa APPKEY
-static const char *LORA_APPKEY = " ";
-
 extern nv_state_t g_state;
 
-static void report_status(const char *event) {
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-             "event=%s;dispenses=%u;miss=%u;slot=%u;pills_left=%u;cal=%d;inprog=%d;sps=%u",
-             event, g_state.pills_dispensed_count, g_state.pills_missed_count,
-             g_state.current_slot, g_state.pills_remaining, g_state.calibrated,
-             g_state.motor_in_progress, g_state.steps_per_slot);
-    if (lora_send_status(msg)) {
-        printf("(LoRa) Status sent: %s\n", msg);
-    } else {
-        printf("(LoRa) Status send failed: %s\n", msg);
-    }
-}
-
-// recovery after power loss mid-turn, resume from saved slot
+// Recovery after power loss
 static void safe_recover_if_mid_turn(void) {
     if (g_state.motor_in_progress) {
         printf("(RECOVERY) Power loss detected mid-turn. Resuming without rotation.\n");
         g_state.motor_in_progress = false;
         state_save();
-        report_status("recovered_mid_turn");
         printf("(RECOVERY) Resume from slot=%u, calibrated=%d, sps=%u\n",
                g_state.current_slot, g_state.calibrated, g_state.steps_per_slot);
     }
@@ -44,69 +26,45 @@ static void safe_recover_if_mid_turn(void) {
 int main() {
     stdio_init_all();
     sensors_init();
-
     sleep_ms(2000);
     setvbuf(stdout, NULL, _IONBF, 0);
 
     printf("Hello from Pill dispenser\n");
-    printf("(BOOT) Initializing...\n");
 
     leds_init();      printf("(INIT) LEDs initialized.\n");
-    buttons_init();   printf("(INIT) Buttons initialized (CAL on GP14, START on GP15).\n");
-    sensors_init();   printf("(INIT) Sensors initialized (Opto GP28, Piezo GP27).\n");
-    stepper_init();   printf("(INIT) Stepper initialized (IN1 GP2, IN2 GP3, IN3 GP6, IN4 GP13).\n");
-    eeprom_init();    printf("(INIT) EEPROM (AT24C256) initialized on I2C0 (SDA GP16, SCL GP17).\n");
-    lora_init();      printf("(INIT) LoRa UART1 initialized (TX GP4, RX GP5).\n");
+    buttons_init();   printf("(INIT) Buttons initialized.\n");
+    sensors_init();   printf("(INIT) Sensors initialized.\n");
+    stepper_init();   printf("(INIT) Stepper initialized.\n");
+    eeprom_init();    printf("(INIT) EEPROM initialized.\n");
 
     state_load();
     g_state.boots_count++;
     state_save();
-    printf("(STATE) Loaded persisted state: dispenses_done=%u, pills_left=%u, calibrated=%d, joined=%d, sps=%u\n",
-           g_state.dispenses_done, g_state.pills_remaining, g_state.calibrated,
-           g_state.joined_network, g_state.steps_per_slot);
 
-    if (!g_state.joined_network) {
-        printf("(LoRa) Attempting network join...\n");
-        if (lora_join_network(LORA_APPKEY)) {
-            g_state.joined_network = true;
-            state_save();
-            printf("(LoRa) Join successful. Network ready.\n");
-            report_status("boot_join_success");
-        } else {
-            printf("(LoRa) Join failed. Will continue offline and retry later.\n");
-            report_status("boot_join_failed");
-        }
-    } else {
-        printf("(LoRa) Already joined. Reporting boot event.\n");
-        report_status("boot");
-    }
-
-    // resume from saved slot
     safe_recover_if_mid_turn();
 
-    // initialize system state based on saved calibration and progress
+    // System state machine
     system_state_t sys;
     if (g_state.calibrated) {
         if (g_state.dispenses_done < DISPENSE_SLOTS) {
             sys = SYS_DISPENSING;
             printf("(RECOVERY) Continuing dispensing from slot=%u\n", g_state.current_slot);
-            report_status("resume_after_powerloss");
         } else {
             sys = SYS_READY_TO_START;
             printf("(RECOVERY) Cycle complete, ready to start new dispensing.\n");
         }
     } else {
         sys = SYS_WAIT_CAL_BUTTON;
-        printf("(ACTION) Press button 1 to start wheel calibration.\n");
+        printf("(ACTION) Press CAL button to start wheel calibration.\n");
     }
+
     while (true) {
         switch (sys) {
             case SYS_WAIT_CAL_BUTTON: {
                 leds_wait_blink();
                 if (button_cal_pressed()) {
                     sys = SYS_CALIBRATING;
-                    printf("(EVENT) Calibration button pressed. Starting calibration...\n");
-                    report_status("calibration_start");
+                    printf("(EVENT) Calibration button pressed.\n");
                 }
                 break;
             }
@@ -126,17 +84,11 @@ int main() {
                     g_state.pills_remaining = DISPENSE_SLOTS;
                     state_save();
 
-                    printf("(CAL) First revolution: %u steps\n", rev1);
-                    printf("(CAL) Second revolution: %u steps\n", rev2);
-                    printf("(CAL) Mean revolution: %u steps\n", mean);
-                    printf("(CAL) Steps per slot: %u\n", g_state.steps_per_slot);
-                    printf("(SUCCESS) Calibration complete. Press button 2 to start dispensing\n");
-                    report_status("calibration_ok");
+                    printf("(SUCCESS) Calibration complete. Press button 2 to start dispensing.\n");
                     sys = SYS_READY_TO_START;
                 } else {
                     leds_blink_error(5);
-                    printf("(ERROR) Calibration failed. Try again.\n");
-                    report_status("calibration_failed");
+                    printf("(ERROR) Calibration failed.\n");
                     sys = SYS_WAIT_CAL_BUTTON;
                 }
                 break;
@@ -145,8 +97,7 @@ int main() {
             case SYS_READY_TO_START: {
                 leds_on_ready();
                 if (button_start_pressed()) {
-                    printf("(EVENT) START button pressed. Beginning dispensing cycle.\n");
-                    report_status("dispense_start");
+                    printf("(EVENT) START button pressed.\n");
                     sys = SYS_DISPENSING;
                 }
                 break;
@@ -161,7 +112,9 @@ int main() {
                         tight_loop_contents();
                     }
 
-                    printf("(MOTION) Advancing wheel to next slot (%u steps)...\n", g_state.steps_per_slot);
+                    // Show which pill is being dispensed
+                    printf("(MOTION) Dispensing pill number %u...\n", g_state.dispenses_done + 1);
+
                     stepper_mark_motion_begin();
                     g_state.motor_in_progress = true;
                     state_save();
@@ -176,8 +129,16 @@ int main() {
                     slot_advance();
                     state_save();
 
-                    printf("(SENSOR) Checking piezo for pill hit...\n");
-                    bool hit = piezo_detect_pill_hit(PIEZO_FALL_WINDOW_MS, PIEZO_DEBOUNCE_MS, PIEZO_MIN_EDGES);
+                    printf("(SENSOR) Waiting for pill hit...\n");
+                    uint32_t t1 = now_ms();
+                    bool hit = false;
+                    while (now_ms() - t1 < PIEZO_FALL_WINDOW_MS) {
+                        if (piezo_was_triggered()) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                    piezo_reset_flag();
 
                     g_state.dispenses_done++;
                     if (hit) {
@@ -185,19 +146,17 @@ int main() {
                         if (g_state.pills_remaining > 0) g_state.pills_remaining--;
                         leds_dispense_progress(g_state.dispenses_done);
                         state_save();
-                        printf("(SUCCESS) Pill detected.\n");
-                        report_status("pill_dispensed");
+                        printf("(SUCCESS) Pill %u detected.\n", g_state.dispenses_done);
                     } else {
                         g_state.pills_missed_count++;
                         leds_blink_error(5);
                         state_save();
-                        printf("(WARNING) No pill detected.\n");
-                        report_status("pill_not_detected");
+                        printf("(WARNING) Pill %u not detected.\n", g_state.dispenses_done);
                     }
                 }
 
+
                 printf("(INFO) One full circle complete. Dispenser empty.\n");
-                report_status("dispenser_empty");
                 g_state.calibrated = false;
                 g_state.dispenses_done = 0;
                 g_state.pills_remaining = DISPENSE_SLOTS;
@@ -207,8 +166,7 @@ int main() {
             }
 
             case SYS_EMPTY: {
-                printf("(INFO) All pills dispensed. Dispenser is empty. Press button 1 to start aggain.\n");
-                report_status("dispenser_empty");
+                printf("(INFO) All pills dispensed. Press button 1 to restart.\n");
                 g_state.calibrated = false;
                 state_save();
                 sys = SYS_WAIT_CAL_BUTTON;
@@ -219,53 +177,3 @@ int main() {
     }
     return 0;
 }
-
-
-
-
-/* some code to find out devui
- #include <stdio.h>
-#include "pico/stdlib.h"
-#include "hardware/uart.h"
-
-#define LORA_UART_ID uart1
-#define LORA_BAUDRATE 9600
-#define LORA_TX_PIN 4
-#define LORA_RX_PIN 5
-
-int main() {
-    stdio_init_all();
-    sleep_ms(2000);
-    setvbuf(stdout, NULL, _IONBF, 0);
-
-    printf("=== LoRa-E5 DevEUI Query ===\n");
-
-    uart_init(LORA_UART_ID, LORA_BAUDRATE);
-    gpio_set_function(LORA_TX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(LORA_RX_PIN, GPIO_FUNC_UART);
-
-    sleep_ms(1000);
-
-    uart_puts(LORA_UART_ID, "AT\r\n");
-    sleep_ms(500);
-    uart_puts(LORA_UART_ID, "AT+ID=DevEui\r\n");
-
-    char buf[64];
-    int idx = 0;
-
-    while (true) {
-        if (uart_is_readable(LORA_UART_ID)) {
-            char c = uart_getc(LORA_UART_ID);
-            if (c == '\r' || c == '\n') {
-                if (idx > 0) {
-                    buf[idx] = '\0';
-                    printf("LoRa-E5 says: %s\n", buf);
-                    idx = 0;
-                }
-            } else if (idx < sizeof(buf) - 1) {
-                buf[idx++] = c;
-            }
-        }
-    }
-}
-*/

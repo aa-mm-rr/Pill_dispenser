@@ -36,7 +36,7 @@
 #define CALIBRATION_SLOT_INDEX    0  // slot with optical opening aligned with sensor
 
 // Timing (testing mode)
-#define DISPENSE_INTERVAL_MS      30000  // 30 seconds
+#define DISPENSE_INTERVAL_MS      5000  // 5s for testing, change to 30 seconds later
 #define STEPPER_STEP_DELAY_US     2000   // ~833 Hz
 
 #define NOMINAL_FULL_REV_STEPS    4096
@@ -47,15 +47,17 @@
 #define PIEZO_DEBOUNCE_MS         0     // debounce successive edges
 #define PIEZO_MIN_EDGES           1      // at least one falling edge counts as "pill hit"
 
-// LoRa settings
+/*
+ * LoRa settings
 #define LORA_PORT                 8
 #define LORA_CLASS                'A'
 #define LORA_MODE                 "LWOTAA"
 
-// Retry or timeout
+ Retry or timeout
 #define LORA_JOIN_TIMEOUT_MS      20000  // join can take up to ~20s
 #define LORA_CMD_RESP_TIMEOUT_MS  5000
 #define LORA_MSG_TIMEOUT_MS       10000
+*/
 
 // EEPROM layout
 #define STATE_MAGIC       0xA1B2C3D4

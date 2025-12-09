@@ -37,17 +37,16 @@ void stepper_init(void) {
     gpio_set_dir(PIN_STEPPER_IN3, GPIO_OUT);
     gpio_set_dir(PIN_STEPPER_IN4, GPIO_OUT);
     apply_mask(0);
-    printf("[STEPPER] ULN2003A half-stepping sequence configured.\n");
 }
 
 void stepper_mark_motion_begin(void) {
-    printf("[STEPPER] Motion begin. Persisting flag for power-loss detection.\n");
+    printf("(STEPPER) Motion begin. Persisting flag for power-loss detection.\n");
     g_state.motor_in_progress = true;
     state_save();
 }
 
 void stepper_mark_motion_end(void) {
-    printf("[STEPPER] Motion end. Clearing power-loss flag and persisting.\n");
+    printf("[(STEPPER) Motion end. Clearing power-loss flag and persisting.\n");
     g_state.motor_in_progress = false;
     state_save();
 }
@@ -66,12 +65,12 @@ void stepper_steps(uint32_t steps) {
 }
 
 void stepper_advance_one_slot(void) {
-    printf("[STEPPER] Advancing one slot (%u steps)...\n", g_state.steps_per_slot);
+    printf("(STEPPER) Moving one slot (%u steps)...\n", g_state.steps_per_slot);
     stepper_steps(g_state.steps_per_slot);
 }
 
 void stepper_full_turn_nominal(void) {
-    printf("[STEPPER] Performing nominal full turn (%u steps)...\n", NOMINAL_FULL_REV_STEPS);
+    printf("(STEPPER) Performing  full turn (%u steps)...\n", NOMINAL_FULL_REV_STEPS);
     stepper_steps(NOMINAL_FULL_REV_STEPS);
 }
 
@@ -113,17 +112,17 @@ static bool seek_closed_then_confirm(uint32_t max_steps) {
 
 // Count one revolution
 uint32_t stepper_calibrate_revolution(void) {
-    printf("[CAL] Seeking first hole...\n");
+    printf("(CAL) Seeking first hole...\n");
 
     // Seek hole anywhere within 2 nominal turns
     if (!seek_open_then_confirm(NOMINAL_FULL_REV_STEPS * 2)) {
-        printf("[CAL][ERR] Failed to find initial OPEN within timeout.\n");
+        printf("(CAL) Failed to find initial OPEN within timeout.\n");
         return 0;
     }
 
     // Leave hole at edge right after hole
     if (!seek_closed_then_confirm(NOMINAL_FULL_REV_STEPS / 2)) {
-        printf("[CAL][ERR] Failed to leave hole to CLOSED.\n");
+        printf("(CAL) Failed to leave hole to CLOSED.\n");
         return 0;
     }
 
@@ -141,16 +140,16 @@ uint32_t stepper_calibrate_revolution(void) {
                 sleep_us(STEPPER_STEP_DELAY_US);
                 steps++;
                 if (opto_raw_closed() && !opto_read_stable()) {
-                    printf("[CAL] Revolution complete at end of hole. Steps=%u\n", steps);
+                    printf("(CAL) Revolution complete at end of hole. Steps=%u\n", steps);
                     return steps;
                 }
             }
-            printf("[CAL][ERR] Timeout leaving hole after OPEN.\n");
+            printf("(CAL) Timeout leaving hole after OPEN.\n");
             return 0;
         }
     }
 
-    printf("[CAL][ERR] Timeout seeking next OPEN.\n");
+    printf("(CAL) Timeout seeking next OPEN.\n");
     return 0;
 }
 
@@ -169,14 +168,14 @@ static uint8_t current_slot = CALIBRATION_SLOT_INDEX;
 
 void slot_set(uint8_t slot_index) {
     current_slot = slot_index % TOTAL_COMPARTMENTS;
-    printf("[SLOT] Logical slot set to %u.\n", current_slot);
+    printf("(SLOT) Logical slot set to %u.\n", current_slot);
 }
 
 void slot_advance(void) {
     current_slot = (current_slot + 1) % TOTAL_COMPARTMENTS;
     g_state.current_slot = current_slot;
     state_save();
-    printf("[SLOT] Logical slot advanced. Current=%u.\n", current_slot);
+    printf("(SLOT) Logical slot advanced. Current=%u.\n", current_slot);
 }
 
 uint8_t slot_get(void) {

@@ -11,13 +11,12 @@ add_executable(pill_dispenser
         src/stepper.c
         src/sensors.c
         src/eeprom.c
-        src/lora.c
         src/leds.c
         src/buttons.c
         src/util.c
 )
 target_include_directories(pill_dispenser PRIVATE include)
 target_link_libraries(pill_dispenser pico_stdlib hardware_adc hardware_gpio hardware_uart hardware_i2c hardware_timer)
-pico_enable_stdio_usb(pill_dispenser 0)
+pico_enable_stdio_usb(pill_dispenser 1)
 pico_enable_stdio_uart(pill_dispenser 1)
 pico_add_extra_outputs(pill_dispenser)
