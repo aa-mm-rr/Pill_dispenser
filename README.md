@@ -1,5 +1,8 @@
 ﻿# Pill dispenser
 This project implements a simple pill dispensing system using a Raspberry Pi Pico. It was developed as part of an Embedded Systems Programming course and demonstrates core concepts such as GPIO control, EEPROM usage, and serial communication.
+<img width="500" height="253" alt="image" src="https://github.com/user-attachments/assets/684445b1-53d7-4f92-8cb0-89fafc9a450e" />
+<img width="216" height="225" alt="image" src="https://github.com/user-attachments/assets/156e5abe-51b8-47d4-b9c1-7cd6e7233cb5" />
+
 ### Features
   - Pill detection via sensor input
   - LED indicators for system status (e.g. waiting for action, ready, error)
@@ -41,4 +44,5 @@ The system is designed to dispense, detect and track pills count using a Raspber
 - **Error Handling**
     - If a pill fails to dispense or sensor input is invalid, the system indicates an error and continues to next slot.
     - LED blinks 5 times to indicate the issue.
+
 
